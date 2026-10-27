@@ -1,4 +1,5 @@
 export default {
+  "fat-diagrams.category.structure": "结构绘制",
   "fat-diagrams.relation": "关系图",
   "fat-diagrams.flow": "流程图",
   "fat-diagrams.relation.empty": "关系图",
@@ -11,4 +12,10 @@ export default {
   "fat-diagrams.config.flow.direction": "方向",
   "fat-diagrams.config.flow.direction.horizontal": "从左到右",
   "fat-diagrams.config.flow.direction.vertical": "从上到下",
+  "fat-diagrams.toolbar.add": "添加节点",
+  "fat-diagrams.toolbar.link": "连线",
+  "fat-diagrams.toolbar.delete": "删除",
+  "fat-diagrams.toolbar.relationHint": "拖拽节点，双击改名",
+  "fat-diagrams.toolbar.flowHint": "从圆点拖出连线，双击改名",
+  "fat-diagrams.node.new": "新节点",
 };

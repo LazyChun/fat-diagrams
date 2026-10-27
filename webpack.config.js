@@ -58,6 +58,14 @@ module.exports = (_, argv) => {
     module: {
       rules: [
         {
+          // @antv/x6 的 esm 入口不带文件后缀，webpack 5 需要关掉 fullySpecified。
+          // 内置图形靠模块求值时注册，不能当成无副作用代码摇掉。
+          test: /\.js$/,
+          include: /node_modules[\\/]@antv[\\/]x6/,
+          resolve: { fullySpecified: false },
+          sideEffects: true,
+        },
+        {
           test: /\.(ts|tsx)$/,
           use: {
             loader: "ts-loader",
@@ -84,7 +92,12 @@ module.exports = (_, argv) => {
           ],
         },
         {
-          test: /\.(png|jpe?g|gif|svg)$/i,
+          // 菜单图标打成 data URL，宿主页面直接用 img src，不依赖插件资源路径
+          test: /\.svg$/i,
+          type: "asset/inline",
+        },
+        {
+          test: /\.(png|jpe?g|gif)$/i,
           type: "asset/resource",
         },
       ],

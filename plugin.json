@@ -14,7 +14,9 @@
   "container": "plugin_f3b8c1d4_6a27_4e95_8c0d_1e7a9b2f4d63",
   "exposed": "./plugin",
   "exposeKey": "./plugin",
-  "activationEvents": ["onStartup"],
+  "activationEvents": [
+    "onStartup"
+  ],
   "contributions": {
     "activityBar": false,
     "primarySidebar": false,
@@ -23,5 +25,8 @@
     "routes": false,
     "widgetTypes": true
   },
-  "permissions": ["dataSource:read", "query:execute"]
+  "permissions": [
+    "dataSource:read",
+    "query:execute"
+  ]
 }

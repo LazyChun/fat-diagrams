@@ -1,4 +1,5 @@
 export default {
+  "fat-diagrams.category.structure": "Structure",
   "fat-diagrams.relation": "Relation",
   "fat-diagrams.flow": "Flow",
   "fat-diagrams.relation.empty": "Relation diagram",
@@ -11,4 +12,10 @@ export default {
   "fat-diagrams.config.flow.direction": "Direction",
   "fat-diagrams.config.flow.direction.horizontal": "Left to right",
   "fat-diagrams.config.flow.direction.vertical": "Top to bottom",
+  "fat-diagrams.toolbar.add": "Add node",
+  "fat-diagrams.toolbar.link": "Link",
+  "fat-diagrams.toolbar.delete": "Delete",
+  "fat-diagrams.toolbar.relationHint": "Drag nodes, double-click to rename",
+  "fat-diagrams.toolbar.flowHint": "Drag from a port, double-click to rename",
+  "fat-diagrams.node.new": "New node",
 };

@@ -3,14 +3,31 @@
  */
 
 declare namespace Block {
+  export interface DiagramNode {
+    id: string;
+    label: string;
+    x?: number;
+    y?: number;
+  }
+
+  export interface DiagramEdge {
+    id: string;
+    source: string;
+    target: string;
+  }
+
   export interface RelationOptions {
     // force-力导向 hierarchy-层级
     layout: "force" | "hierarchy" | string;
+    nodes?: DiagramNode[];
+    edges?: DiagramEdge[];
   }
 
   export interface FlowOptions {
     // horizontal-从左到右 vertical-从上到下
     direction: "horizontal" | "vertical" | string;
+    nodes?: DiagramNode[];
+    edges?: DiagramEdge[];
   }
 
   export interface Item {

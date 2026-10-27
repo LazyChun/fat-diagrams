@@ -8,7 +8,8 @@
  * 宿主添加卡片菜单对 name 调用 intl.formatMessage 时会原样显示。
  * 语言切换时 dispose 旧注册并按新 locale 重新注册。
  *
- * 图标复用宿主 Icon 表：gitMerge、blockEtlDag。
+ * 图标由插件自己提供（iconUrl），不写入宿主图标表。
+ * 分类 structure 由插件注册，标题随语言切换，排在过滤下面。
  */
 import React from "react";
 import type {
@@ -25,6 +26,9 @@ import {
 } from "pluginComps";
 import cn from "./locales/zh_CN";
 import en from "./locales/en_US";
+import { DEFAULT_FLOW, DEFAULT_RELATION } from "./diagram/types";
+import relationIcon from "./assets/relation.svg";
+import flowIcon from "./assets/flow.svg";
 
 const LOCALE_MESSAGES: Record<string, Record<string, string>> = {
   zh_CN: cn,
@@ -63,7 +67,7 @@ interface DiagramComponentProps {
 interface DiagramCardDef {
   type: string;
   titleKey: string;
-  icon: string;
+  iconUrl: string;
   index: number;
   defaultSize: { w: number; h: number };
   defaultOptions: Record<string, unknown>;
@@ -71,17 +75,17 @@ interface DiagramCardDef {
   configComponent: React.FC;
 }
 
+const STRUCTURE_CATEGORY = "structure";
+
 const DIAGRAM_CARDS: DiagramCardDef[] = [
   {
     type: "fat-diagrams.relation",
     titleKey: "fat-diagrams.relation",
-    icon: "gitMerge",
+    iconUrl: relationIcon,
     index: 0,
     defaultSize: { w: 12, h: 36 },
     defaultOptions: {
-      relation: {
-        layout: "force",
-      },
+      relation: DEFAULT_RELATION,
     },
     component: RelationDiagram,
     configComponent: RelationDisplayConfig,
@@ -89,13 +93,11 @@ const DIAGRAM_CARDS: DiagramCardDef[] = [
   {
     type: "fat-diagrams.flow",
     titleKey: "fat-diagrams.flow",
-    icon: "blockEtlDag",
+    iconUrl: flowIcon,
     index: 1,
     defaultSize: { w: 12, h: 36 },
     defaultOptions: {
-      flow: {
-        direction: "horizontal",
-      },
+      flow: DEFAULT_FLOW,
     },
     component: FlowDiagram,
     configComponent: FlowDisplayConfig,
@@ -127,6 +129,14 @@ const registerDiagramCards = (locale: string): void => {
   if (!sdk) {
     return;
   }
+  cardDisposables.push(
+    sdk.contributions.registerBlockCategory({
+      id: STRUCTURE_CATEGORY,
+      title: translateTitle(locale, "fat-diagrams.category.structure"),
+      after: "filter",
+    }),
+  );
+
   for (const card of DIAGRAM_CARDS) {
     const component = card.component;
     const configComponent = card.configComponent;
@@ -136,8 +146,8 @@ const registerDiagramCards = (locale: string): void => {
       sdk.contributions.registerBlockType({
         type: cardType,
         title: translateTitle(locale, card.titleKey),
-        icon: card.icon,
-        category: "other",
+        iconUrl: card.iconUrl,
+        category: STRUCTURE_CATEGORY,
         index: card.index,
         defaultSize: {
           ...card.defaultSize,

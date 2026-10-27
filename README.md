@@ -1,6 +1,6 @@
 # fat-diagrams
 
-fat-notes 关系与流程图插件。注册两种画布卡片：关系图、流程图。
+fat-notes 关系与流程图插件。关系图用 [AntV G6](https://g6.antv.antgroup.com/)，流程图用 [AntV X6](https://x6.antv.vision/)。两张卡片都在添加组件的「结构绘制」分类里，可以手动改节点、连线和文字。
 
 ## 开发
 

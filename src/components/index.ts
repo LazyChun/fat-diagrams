@@ -1,5 +1,5 @@
 import InitSdk from "./basic/InitSdk/InitSdk";
 import ConfigForm from "./basic/ConfigForm/ConfigForm";
-import DiagramCanvas from "./basic/DiagramCanvas/DiagramCanvas";
+import DiagramToolbar from "./basic/DiagramToolbar/DiagramToolbar";
 
-export { InitSdk, ConfigForm, DiagramCanvas };
+export { InitSdk, ConfigForm, DiagramToolbar };

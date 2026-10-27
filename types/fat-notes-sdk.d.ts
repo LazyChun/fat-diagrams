@@ -294,6 +294,22 @@ export interface BlockTypeDef {
   triggers?: Array<string | BlockActionTriggerDef>;
 }
 
+/**
+ * 添加组件菜单中的分类。插件用 `registerBlockCategory` 注册后，
+ * `BlockTypeDef.category` 引用这里的 `id`。标题由插件按当前语言给出。
+ */
+export interface BlockCategoryDef {
+  /** 分类 id，与 BlockTypeDef.category 对应，例如 "structure"。 */
+  id: string;
+  /** 已按当前语言翻译好的展示名。 */
+  title: string;
+  /**
+   * 插在该分类 id 后面。锚点可以是内置分类，或更早注册的插件分类。
+   * 锚点不存在时，排在内置「其他」之前。
+   */
+  after?: string;
+}
+
 export interface SettingsPageDef {
   id: string;
   title: string;
@@ -453,6 +469,11 @@ export interface ContributionsApi {
   registerRoutePage(def: RoutePageDef): Disposable;
   registerWorkbenchPage(def: WorkbenchPageDef): Disposable;
   registerBlockType(def: BlockTypeDef): Disposable;
+  /**
+   * 注册添加组件菜单的分类。卸载插件或 dispose 后分类消失，
+   * 其下卡片若仍注册着，会排到菜单末尾。
+   */
+  registerBlockCategory(def: BlockCategoryDef): Disposable;
   registerBlockDisplayConfig(def: BlockDisplayConfigDef): Disposable;
   registerSettingsPage(def: SettingsPageDef): Disposable;
   registerSearchProvider(def: SearchProviderDef): Disposable;
