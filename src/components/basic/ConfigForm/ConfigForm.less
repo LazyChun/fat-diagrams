@@ -1,0 +1,47 @@
+.configForm {
+  :global {
+    .ant-form-item {
+      width: 100%;
+      margin-bottom: 16px;
+    }
+
+    .ant-form-item-row {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: flex-start;
+    }
+
+    .ant-form-item-label {
+      flex: 0 0 auto !important;
+      width: max-content !important;
+      max-width: none !important;
+      padding-inline-end: 12px;
+      text-align: left;
+      overflow: visible;
+      white-space: nowrap;
+
+      > label {
+        height: 32px;
+        max-width: none !important;
+      }
+    }
+
+    .ant-form-item-control {
+      flex: 1 1 0 !important;
+      min-width: 0;
+      max-width: none !important;
+    }
+
+    .ant-form-item-control-input-content {
+      > .ant-select,
+      > .ant-input,
+      > .ant-input-number {
+        width: 100%;
+      }
+    }
+  }
+}
+
+.configFormItem {
+  margin-bottom: 16px;
+}

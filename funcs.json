@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "f3b8c1d4-6a27-4e95-8c0d-1e7a9b2f4d63",
+  "code": "fat-diagrams",
+  "type": "bespokePlugin",
+  "name": "Fat Diagrams",
+  "description": "提供关系图和流程图卡片，把节点和连线画成可配置的图。",
+  "shortDesc": "关系与流程图",
+  "category": "diagram",
+  "keywords": ["关系图", "流程图", "拓扑", "diagram", "flowchart"],
+  "engines": { "fat-notes": ">=0.1.0" },
+  "features": [
+    {
+      "id": "relation-diagram",
+      "name": "关系图",
+      "description": "用节点和连线展示对象之间的关系。",
+      "match": "(关系图|拓扑图|relation\\s*diagram)"
+    },
+    {
+      "id": "flow-diagram",
+      "name": "流程图",
+      "description": "按步骤把流程画成从上到下或从左到右的连线图。",
+      "match": "(流程图|流程|flow\\s*chart|flowchart)"
+    }
+  ]
+}

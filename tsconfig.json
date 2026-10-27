@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "fat-notes-sdk": ["types/fat-notes-sdk.d.ts"],
+      "components": ["src/components/index"],
+      "hooks": ["src/hooks/index"],
+      "contexts": ["src/contexts/index"],
+      "pluginComps": ["src/pluginComps/index"]
+    }
+  },
+  "include": ["src", "types", "typings.d.ts"]
+}
