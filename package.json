@@ -1,7 +1,7 @@
 {
   "name": "fat-diagrams",
   "version": "0.1.0",
-  "description": "FatNotes bespoke plugin: fat-diagrams — 关系图 / 流程图卡片",
+  "description": "FatNotes bespoke plugin: fat-diagrams — 关系图 / draw.io 流程图",
   "private": true,
   "scripts": {
     "build": "webpack --mode production",
@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@antv/g6": "^5.1.1",
-    "@antv/x6": "^3.1.8",
     "react": "18.2.0",
     "react-dom": "18.2.0"
   },

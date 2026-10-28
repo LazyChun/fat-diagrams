@@ -4,7 +4,7 @@
   "code": "fat-diagrams",
   "type": "bespokePlugin",
   "name": "Fat Diagrams",
-  "description": "提供关系图和流程图卡片，把节点和连线画成可配置的图。",
+  "description": "提供关系图，以及基于 draw.io 的流程图。",
   "shortDesc": "关系与流程图",
   "category": "diagram",
   "keywords": [
@@ -27,7 +27,7 @@
     {
       "id": "flow-diagram",
       "name": "流程图",
-      "description": "按步骤把流程画成从上到下或从左到右的连线图。",
+      "description": "用 draw.io 编辑流程图，图形保存在卡片里。",
       "match": "(流程图|流程|flow\\s*chart|flowchart)"
     }
   ]

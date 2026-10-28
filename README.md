@@ -1,6 +1,14 @@
 # fat-diagrams
 
-fat-notes 关系与流程图插件。关系图用 [AntV G6](https://g6.antv.antgroup.com/)，流程图用 [AntV X6](https://x6.antv.vision/)。两张卡片都在添加组件的「结构绘制」分类里，可以手动改节点、连线和文字。
+fat-notes 关系与流程图插件。关系图用 [AntV G6](https://g6.antv.antgroup.com/)，流程图用 [draw.io](https://github.com/jgraph/drawio) 的嵌入编辑器。两张卡片都在添加组件的「结构绘制」分类里。
+
+流程图使用随插件发布的 draw.io 编辑器（`vendor/drawio`，构建后在 `dist/drawio`），不访问 draw.io 的网站。图的 XML 存在卡片 `options.flow.xml` 里。以前用节点和连线存的旧图，第一次打开时会转成 draw.io 的图。
+
+编辑器版本写在 `vendor/drawio/VERSION`。要换版本，下载对应的 `draw.war` 后执行：
+
+```
+python scripts/extract_drawio.py path\to\draw.war
+```
 
 ## 开发
 

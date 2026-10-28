@@ -1,8 +1,7 @@
 /**
  * fat-diagrams 插件入口 — Module Federation expose "./plugin"
  *
- * 向宿主注册两种图卡片：关系图、流程图。
- * 画布目前是占位，配置面板已接上宿主的名称和外框。
+ * 向宿主注册两种图卡片：关系图（AntV G6）、流程图（draw.io）。
  *
  * 标题按当前 locale 解析成文本再注册。插件 key 不在宿主消息目录里，
  * 宿主添加卡片菜单对 name 调用 intl.formatMessage 时会原样显示。
@@ -26,7 +25,8 @@ import {
 } from "pluginComps";
 import cn from "./locales/zh_CN";
 import en from "./locales/en_US";
-import { DEFAULT_FLOW, DEFAULT_RELATION } from "./diagram/types";
+import { DEFAULT_RELATION } from "./diagram/types";
+import { DEFAULT_FLOW } from "./diagram/flowXml";
 import relationIcon from "./assets/relation.svg";
 import flowIcon from "./assets/flow.svg";
 
@@ -69,7 +69,7 @@ interface DiagramCardDef {
   titleKey: string;
   iconUrl: string;
   index: number;
-  defaultSize: { w: number; h: number };
+  defaultSize: { w: number; h: number; minW?: number; minH?: number };
   defaultOptions: Record<string, unknown>;
   component: React.FC<DiagramComponentProps>;
   configComponent: React.FC;
@@ -83,7 +83,7 @@ const DIAGRAM_CARDS: DiagramCardDef[] = [
     titleKey: "fat-diagrams.relation",
     iconUrl: relationIcon,
     index: 0,
-    defaultSize: { w: 12, h: 36 },
+    defaultSize: { w: 12, h: 80 },
     defaultOptions: {
       relation: DEFAULT_RELATION,
     },
@@ -95,7 +95,7 @@ const DIAGRAM_CARDS: DiagramCardDef[] = [
     titleKey: "fat-diagrams.flow",
     iconUrl: flowIcon,
     index: 1,
-    defaultSize: { w: 12, h: 36 },
+    defaultSize: { w: 24, h: 80, minW: 8, minH: 40 },
     defaultOptions: {
       flow: DEFAULT_FLOW,
     },
@@ -150,9 +150,9 @@ const registerDiagramCards = (locale: string): void => {
         category: STRUCTURE_CATEGORY,
         index: card.index,
         defaultSize: {
-          ...card.defaultSize,
           minW: 4,
           minH: 8,
+          ...card.defaultSize,
         },
         defaultOptions: card.defaultOptions,
         // 图还没有绑定查询，先隐藏数据配置区

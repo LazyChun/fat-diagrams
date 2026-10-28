@@ -24,8 +24,9 @@ declare namespace Block {
   }
 
   export interface FlowOptions {
-    // horizontal-从左到右 vertical-从上到下
-    direction: "horizontal" | "vertical" | string;
+    // draw.io mxGraph XML。旧数据可能只有 nodes/edges，打开时会转成 xml。
+    xml?: string;
+    direction?: "horizontal" | "vertical" | string;
     nodes?: DiagramNode[];
     edges?: DiagramEdge[];
   }

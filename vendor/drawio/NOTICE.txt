@@ -1,0 +1,5 @@
+draw.io v32.6.1
+Source: https://github.com/jgraph/drawio
+The editor files are licensed under the Apache License 2.0.
+Copyright (c) JGraph Holdings Ltd and draw.io AG.
+This copy is configured to stay on the local plugin folder.

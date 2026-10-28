@@ -17,12 +17,6 @@ export interface RelationModel {
   edges: DiagramEdge[];
 }
 
-export interface FlowModel {
-  direction: "horizontal" | "vertical" | string;
-  nodes: DiagramNode[];
-  edges: DiagramEdge[];
-}
-
 export const DEFAULT_RELATION: RelationModel = {
   layout: "force",
   nodes: [
@@ -33,19 +27,6 @@ export const DEFAULT_RELATION: RelationModel = {
   edges: [
     { id: "e1", source: "n1", target: "n2" },
     { id: "e2", source: "n1", target: "n3" },
-  ],
-};
-
-export const DEFAULT_FLOW: FlowModel = {
-  direction: "horizontal",
-  nodes: [
-    { id: "n1", label: "Start", x: 24, y: 48 },
-    { id: "n2", label: "Process", x: 200, y: 48 },
-    { id: "n3", label: "End", x: 376, y: 48 },
-  ],
-  edges: [
-    { id: "e1", source: "n1", target: "n2" },
-    { id: "e2", source: "n2", target: "n3" },
   ],
 };
 

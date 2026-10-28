@@ -4,7 +4,7 @@
   "code": "fat-diagrams",
   "displayName": "Fat Diagrams",
   "version": "0.1.0",
-  "description": "提供关系图和流程图卡片，把节点和连线画成可配置的图。",
+  "description": "提供关系图，以及基于 draw.io 的流程图。",
   "engines": {
     "fat-notes": ">=0.1.0"
   },

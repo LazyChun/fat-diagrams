@@ -1,50 +1,16 @@
 /**
- * 流程图 — AntV X6。可拖拽步骤、从连接点拉线、双击改名、删除，结果写回 options.flow。
+ * 流程图 — 插件自带的 draw.io 编辑器（dist/drawio）。
+ * 图以 XML 写回 options.flow.xml。
+ * 协议见 https://www.drawio.com/docs/reference/embed-mode/
  */
-import React, { useEffect, useRef } from "react";
-import {
-  Graph,
-  Keyboard,
-  Selection,
-  Shape,
-  Snapline,
-  connectionPointRegistry,
-  connectorRegistry,
-  gridRegistry,
-  highlighterRegistry,
-  markerRegistry,
-  nodeToolRegistry,
-  portLayoutRegistry,
-  routerRegistry,
-} from "@antv/x6";
-import type { Graph as X6Graph } from "@antv/x6";
-
-// 生产构建会摇掉只靠副作用注册的内置图形、路由和工具，创建节点时就会报 shape 缺失。
-const keepX6Builtins = () => {
-  void Shape.Rect;
-  void Shape.Edge;
-  routerRegistry.get("manhattan");
-  routerRegistry.get("orth");
-  connectorRegistry.get("rounded");
-  markerRegistry.get("block");
-  nodeToolRegistry.get("node-editor");
-  portLayoutRegistry.get("top");
-  gridRegistry.get("dot");
-  highlighterRegistry.get("stroke");
-  connectionPointRegistry.get("boundary");
-};
-keepX6Builtins();
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Button, Spin } from "antd";
 import { useIntl } from "react-intl";
 import { useDispatch, useStore } from "react-redux";
 import type { BlockActionShowParams, BlockTimeContext } from "fat-notes-sdk";
-import { DiagramToolbar } from "components";
-import {
-  DEFAULT_FLOW,
-  nextDiagramId,
-  type DiagramEdge,
-  type DiagramNode,
-  type FlowModel,
-} from "../../diagram/types";
+import { SdkContext } from "contexts";
+import { drawioIndexUrl } from "../../diagram/drawioUrl";
+import { readFlowXml } from "../../diagram/flowXml";
 import { saveBlockOptions } from "../../diagram/saveBlock";
 import styles from "./FlowDiagram.less";
 
@@ -58,200 +24,110 @@ interface FlowDiagramProps {
   onShowActions?: (params: BlockActionShowParams) => void;
 }
 
-interface CellJson {
-  id?: string;
-  source?: { cell?: string };
-  target?: { cell?: string };
-  position?: { x?: number; y?: number };
-  attrs?: { label?: { text?: string } };
+const SAVE_DELAY = 500;
+
+interface DrawioMessage {
+  event?: string;
+  xml?: string;
 }
 
-const NODE_WIDTH = 120;
-const NODE_HEIGHT = 40;
-
-const readFlow = (item: Block.Item): FlowModel => {
-  const flow = item.options?.flow;
-  return {
-    direction: flow?.direction || DEFAULT_FLOW.direction,
-    nodes:
-      flow?.nodes && flow.nodes.length
-        ? flow.nodes.map((node) => ({ ...node }))
-        : DEFAULT_FLOW.nodes.map((node) => ({ ...node })),
-    edges: (flow?.edges || DEFAULT_FLOW.edges).map((edge) => ({ ...edge })),
-  };
+const parseMessage = (data: unknown): DrawioMessage | null => {
+  if (typeof data === "string") {
+    if (!data) {
+      return null;
+    }
+    try {
+      return JSON.parse(data) as DrawioMessage;
+    } catch {
+      return null;
+    }
+  }
+  if (data && typeof data === "object") {
+    return data as DrawioMessage;
+  }
+  return null;
 };
 
-const modelKey = (model: FlowModel): string => JSON.stringify(model);
-
-const portGroup = (position: string) => ({
-  position,
-  attrs: {
-    circle: {
-      r: 4,
-      magnet: true,
-      stroke: "#1677FF",
-      strokeWidth: 1,
-      fill: "#fff",
-    },
-  },
-});
-
-const ports = {
-  groups: {
-    top: portGroup("top"),
-    right: portGroup("right"),
-    bottom: portGroup("bottom"),
-    left: portGroup("left"),
-  },
-  items: [
-    { id: "top", group: "top" },
-    { id: "right", group: "right" },
-    { id: "bottom", group: "bottom" },
-    { id: "left", group: "left" },
-  ],
-};
-
-const nodeMeta = (node: DiagramNode) => ({
-  id: node.id,
-  shape: "rect",
-  x: node.x ?? 24,
-  y: node.y ?? 48,
-  width: NODE_WIDTH,
-  height: NODE_HEIGHT,
-  attrs: {
-    body: {
-      fill: "#ffffff",
-      stroke: "#1677FF",
-      rx: 6,
-      ry: 6,
-    },
-    label: {
-      text: node.label,
-      fill: "#172634",
-      fontSize: 13,
-    },
-  },
-  ports,
-  tools: {
-    items: [
-      {
-        name: "node-editor",
-        args: {
-          getText: "label/text",
-          setText: "label/text",
-        },
-      },
-    ],
-  },
-});
-
-const edgeAppearance = (direction: string) => ({
-  shape: "edge",
-  router: { name: direction === "vertical" ? "orth" : "manhattan" },
-  connector: { name: "rounded", args: { radius: 8 } },
-  attrs: {
-    line: {
-      stroke: "#8C8C8C",
-      strokeWidth: 1,
-      targetMarker: { name: "block", width: 8, height: 6 },
-    },
-  },
-});
-
-const edgeMeta = (edge: DiagramEdge, direction: string) => ({
-  id: edge.id,
-  source: { cell: edge.source },
-  target: { cell: edge.target },
-  ...edgeAppearance(direction),
-});
-
-const toCells = (model: FlowModel) => [
-  ...model.nodes.map((node) => nodeMeta(node)),
-  ...model.edges.map((edge) => edgeMeta(edge, model.direction)),
-];
-
-const readGraph = (graph: X6Graph): Pick<FlowModel, "nodes" | "edges"> => {
-  const cells = graph.toJSON().cells as CellJson[];
-  const nodes: DiagramNode[] = [];
-  const edges: DiagramEdge[] = [];
-  cells.forEach((cell) => {
-    if (cell.source?.cell && cell.target?.cell) {
-      edges.push({
-        id: String(cell.id || nextDiagramId("e")),
-        source: cell.source.cell,
-        target: cell.target.cell,
-      });
-      return;
-    }
-    if (!cell.id) {
-      return;
-    }
-    nodes.push({
-      id: cell.id,
-      label: String(cell.attrs?.label?.text ?? ""),
-      x: cell.position?.x,
-      y: cell.position?.y,
-    });
-  });
-  return { nodes, edges };
-};
-
-const arrange = (graph: X6Graph, direction: string) => {
-  const horizontal = direction !== "vertical";
-  const nodes = [...graph.getNodes()].sort((left, right) => {
-    const a = left.position();
-    const b = right.position();
-    return horizontal ? a.y - b.y || a.x - b.x : a.x - b.x || a.y - b.y;
-  });
-  nodes.forEach((node, index) => {
-    if (horizontal) {
-      node.position(24 + index * 176, 48);
-    } else {
-      node.position(80, 24 + index * 100);
-    }
-  });
-  const router = horizontal ? "manhattan" : "orth";
-  graph.getEdges().forEach((edge) => {
-    edge.setRouter({ name: router });
-  });
+const drawioDark = (theme: string): string => {
+  if (theme === "dark") {
+    return "1";
+  }
+  if (theme === "light") {
+    return "0";
+  }
+  return "auto";
 };
 
 const FlowDiagram: React.FC<FlowDiagramProps> = (props) => {
   const { item, inConfig } = props;
   const intl = useIntl();
+  const sdk = useContext(SdkContext).sdk;
   const dispatch = useDispatch();
   const store = useStore();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const graphRef = useRef<X6Graph | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const itemRef = useRef(item);
   const inConfigRef = useRef(inConfig);
-  const writtenRef = useRef("");
   const readyRef = useRef(false);
-  const directionRef = useRef(readFlow(item).direction);
+  const writtenRef = useRef("");
+  const pendingRef = useRef("");
+  const timerRef = useRef<number | undefined>(undefined);
+  const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
+  const [attempt, setAttempt] = useState(0);
+  const [theme, setTheme] = useState(() => sdk?.ui.theme.get() || "light");
   itemRef.current = item;
   inConfigRef.current = inConfig;
-  directionRef.current = readFlow(item).direction;
 
-  const persistRef = useRef<() => void>(() => undefined);
-  persistRef.current = () => {
-    const graph = graphRef.current;
-    if (!graph || !readyRef.current) {
+  useEffect(() => {
+    if (!sdk) {
       return;
     }
-    const current = itemRef.current;
-    const model = readFlow(current);
-    const drawn = readGraph(graph);
-    const nextModel: FlowModel = {
-      direction: model.direction,
-      nodes: drawn.nodes,
-      edges: drawn.edges,
+    setTheme(sdk.ui.theme.get());
+    const subscription = sdk.ui.theme.onChange(setTheme);
+    return () => subscription.dispose();
+  }, [sdk]);
+
+  const lang = intl.locale.toLowerCase().startsWith("zh") ? "zh" : "en";
+  const editorUrl = useMemo(() => {
+    const indexUrl = drawioIndexUrl();
+    if (!indexUrl) {
+      return "";
+    }
+    const url = new URL(indexUrl);
+    const params: Record<string, string> = {
+      embed: "1",
+      proto: "json",
+      spin: "1",
+      ui: "simple",
+      splash: "0",
+      stealth: "1",
+      offline: "1",
+      libs: "general;flowchart",
+      noSaveBtn: "1",
+      noExitBtn: "1",
+      saveAndExit: "0",
+      lang,
+      dark: drawioDark(theme),
     };
-    const key = modelKey(nextModel);
-    if (key === writtenRef.current) {
+    Object.entries(params).forEach(([key, value]) => {
+      url.searchParams.set(key, value);
+    });
+    return url.href;
+  }, [lang, theme]);
+  const editorOrigin = useMemo(() => {
+    if (!editorUrl) {
+      return "";
+    }
+    return new URL(editorUrl).origin;
+  }, [editorUrl]);
+
+  const persistRef = useRef<(xml: string) => void>(() => undefined);
+  persistRef.current = (xml: string) => {
+    if (!xml || xml === writtenRef.current) {
       return;
     }
-    writtenRef.current = key;
-    const options = { ...current.options, flow: nextModel };
+    writtenRef.current = xml;
+    const current = itemRef.current;
+    const options = { ...current.options, flow: { xml } };
     itemRef.current = { ...current, options };
     void saveBlockOptions(
       dispatch,
@@ -262,140 +138,183 @@ const FlowDiagram: React.FC<FlowDiagramProps> = (props) => {
     );
   };
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) {
+  const flushRef = useRef(() => {
+    if (timerRef.current !== undefined) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = undefined;
+    }
+    const xml = pendingRef.current;
+    pendingRef.current = "";
+    if (xml) {
+      persistRef.current(xml);
+    }
+  });
+
+  const reloadRef = useRef<() => void>(() => undefined);
+  reloadRef.current = () => setAttempt((value) => value + 1);
+
+  const scheduleRef = useRef<(xml: string) => void>(() => undefined);
+  scheduleRef.current = (xml: string) => {
+    if (!xml || xml === writtenRef.current) {
       return;
     }
-    let graph: X6Graph;
-    graph = new Graph({
-      container: el,
-      autoResize: true,
-      background: { color: "transparent" },
-      grid: true,
-      panning: { enabled: true, eventTypes: ["rightMouseDown"] },
-      mousewheel: { enabled: true, modifiers: ["ctrl", "meta"] },
-      connecting: {
-        snap: true,
-        allowBlank: false,
-        allowLoop: false,
-        allowNode: false,
-        highlight: true,
-        router: {
-          name: directionRef.current === "vertical" ? "orth" : "manhattan",
-        },
-        connector: { name: "rounded", args: { radius: 8 } },
-        createEdge(): ReturnType<X6Graph["createEdge"]> {
-          return graph.createEdge(edgeAppearance(directionRef.current));
-        },
-      },
-    });
-    graph.use(
-      new Selection({
-        multiple: true,
-        rubberband: true,
-        showNodeSelectionBox: true,
-        showEdgeSelectionBox: true,
-      }),
-    );
-    graph.use(new Snapline());
-    graph.use(new Keyboard());
-    graph.bindKey(["delete", "backspace"], () => {
-      graph.getSelectedCells().forEach((cell: { remove: () => void }) => {
-        cell.remove();
-      });
-      persistRef.current();
-    });
-    graphRef.current = graph;
-    const model = readFlow(itemRef.current);
-    writtenRef.current = modelKey(model);
-    graph.fromJSON({ cells: toCells(model) });
-    readyRef.current = true;
-
-    const schedule = () => {
-      if (readyRef.current) {
-        persistRef.current();
-      }
-    };
-    graph.on("node:moved", schedule);
-    graph.on("edge:connected", schedule);
-    graph.on("cell:removed", schedule);
-    graph.on("cell:added", schedule);
-    graph.on("node:change:attrs", schedule);
-
-    return () => {
-      readyRef.current = false;
-      graph.dispose();
-      graphRef.current = null;
-    };
-  }, [item.id]);
-
-  const externalKey = modelKey(readFlow(item));
-
-  useEffect(() => {
-    const graph = graphRef.current;
-    if (!graph || !readyRef.current || externalKey === writtenRef.current) {
-      return;
+    pendingRef.current = xml;
+    if (timerRef.current !== undefined) {
+      window.clearTimeout(timerRef.current);
     }
-    const model = readFlow(itemRef.current);
-    const previous = writtenRef.current
-      ? (JSON.parse(writtenRef.current) as FlowModel)
-      : null;
-    writtenRef.current = externalKey;
-    if (previous && previous.direction !== model.direction) {
-      arrange(graph, model.direction);
-      persistRef.current();
-      return;
-    }
-    readyRef.current = false;
-    graph.fromJSON({ cells: toCells(model) });
-    readyRef.current = true;
-  }, [externalKey]);
-
-  const addNode = () => {
-    const graph = graphRef.current;
-    if (!graph) {
-      return;
-    }
-    const nodes = graph.getNodes();
-    const last = nodes[nodes.length - 1];
-    const pos = last ? last.position() : { x: 24, y: 48 };
-    const horizontal = directionRef.current !== "vertical";
-    const id = nextDiagramId("n");
-    graph.addNode(
-      nodeMeta({
-        id,
-        label: intl.formatMessage({ id: "fat-diagrams.node.new" }),
-        x: horizontal ? pos.x + 176 : pos.x,
-        y: horizontal ? pos.y : pos.y + 100,
-      }),
-    );
-    persistRef.current();
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = undefined;
+      const next = pendingRef.current;
+      pendingRef.current = "";
+      persistRef.current(next);
+    }, SAVE_DELAY);
   };
 
-  return (
-    <div className={styles.editor}>
-      <DiagramToolbar
-        addText={intl.formatMessage({ id: "fat-diagrams.toolbar.add" })}
-        deleteText={intl.formatMessage({ id: "fat-diagrams.toolbar.delete" })}
-        hint={intl.formatMessage({ id: "fat-diagrams.toolbar.flowHint" })}
-        onAdd={addNode}
-        onDelete={() => {
-          const graph = graphRef.current;
-          if (!graph) {
-            return;
-          }
-          graph.getSelectedCells().forEach((cell: { remove: () => void }) => {
-        cell.remove();
+  useEffect(() => {
+    readyRef.current = false;
+    if (!editorUrl || !editorOrigin) {
+      setPhase("error");
+      return;
+    }
+    setPhase("loading");
+    const timeout = window.setTimeout(() => {
+      if (!readyRef.current) {
+        setPhase("error");
+      }
+    }, 20000);
+
+    const post = (message: Record<string, unknown>) => {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify(message),
+        editorOrigin,
+      );
+    };
+    const loadDiagram = (xml: string) => {
+      writtenRef.current = xml;
+      post({
+        action: "load",
+        xml,
+        autosave: 1,
+        noSaveBtn: 1,
+        noExitBtn: 1,
+        saveAndExit: 0,
+        fit: 1,
+        maxFitScale: 1,
       });
-          persistRef.current();
-        }}
-      />
-      <div
-        ref={containerRef}
-        className={styles.canvas}
-        onMouseDown={(event) => event.stopPropagation()}
-      />
+    };
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== editorOrigin) {
+        return;
+      }
+      if (event.source !== iframeRef.current?.contentWindow) {
+        return;
+      }
+      const message = parseMessage(event.data);
+      if (!message?.event) {
+        return;
+      }
+      if (message.event === "init") {
+        readyRef.current = true;
+        setPhase("ready");
+        loadDiagram(readFlowXml(itemRef.current));
+        return;
+      }
+      if (message.event === "load") {
+        post({ action: "status", message: "", modified: false });
+        return;
+      }
+      if (message.event === "autosave" || message.event === "save") {
+        if (typeof message.xml === "string") {
+          scheduleRef.current(message.xml);
+        }
+        return;
+      }
+      if (message.event === "exit") {
+        flushRef.current();
+        reloadRef.current();
+      }
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener("message", onMessage);
+      flushRef.current();
+      readyRef.current = false;
+    };
+  }, [editorOrigin, editorUrl, attempt]);
+
+  const externalXml = readFlowXml(item);
+  useEffect(() => {
+    if (!readyRef.current) {
+      return;
+    }
+    if (
+      externalXml === writtenRef.current ||
+      externalXml === pendingRef.current
+    ) {
+      return;
+    }
+    const frame = iframeRef.current?.contentWindow;
+    if (!frame || !editorOrigin) {
+      return;
+    }
+    writtenRef.current = externalXml;
+    pendingRef.current = "";
+    frame.postMessage(
+      JSON.stringify({
+        action: "load",
+        xml: externalXml,
+        autosave: 1,
+        noSaveBtn: 1,
+        noExitBtn: 1,
+        saveAndExit: 0,
+      }),
+      editorOrigin,
+    );
+  }, [editorOrigin, externalXml]);
+
+  return (
+    <div
+      className={styles.editor}
+      data-theme={theme === "dark" ? "dark" : "light"}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      {editorUrl ? (
+        <iframe
+          key={`${editorUrl}:${attempt}`}
+          ref={iframeRef}
+          className={styles.frame}
+          src={editorUrl}
+          title={intl.formatMessage({ id: "fat-diagrams.flow" })}
+          referrerPolicy="no-referrer"
+          allow="clipboard-read; clipboard-write"
+        />
+      ) : null}
+      {phase !== "ready" ? (
+        <div className={styles.overlay}>
+          {phase === "error" ? (
+            <div className={styles.message}>
+              <span>
+                {intl.formatMessage({ id: "fat-diagrams.flow.error" })}
+              </span>
+              <Button
+                size="small"
+                onClick={() => setAttempt((value) => value + 1)}
+              >
+                {intl.formatMessage({ id: "fat-diagrams.flow.retry" })}
+              </Button>
+            </div>
+          ) : (
+            <Spin
+              description={intl.formatMessage({
+                id: "fat-diagrams.flow.loading",
+              })}
+            />
+          )}
+        </div>
+      ) : null}
     </div>
   );
 };

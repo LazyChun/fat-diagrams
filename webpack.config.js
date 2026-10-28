@@ -19,6 +19,7 @@
  * All `shared` entries MUST be singleton and version-aligned with the host
  * (fat-notes) to avoid hook mismatches.
  */
+const fs = require("fs");
 const path = require("path");
 const {
   ModuleFederationPlugin,
@@ -44,7 +45,10 @@ module.exports = (_, argv) => {
       // 开发态使用稳定 chunk 名，避免 watch 重编译后旧运行时请求已清理的内容哈希文件
       chunkFilename: isProd ? "[name].[contenthash:8].js" : "[name].js",
       publicPath: "auto",
-      clean: true,
+      // 本地 draw.io 体积大，watch 时保留 dist/drawio，避免每次重编都再拷一遍
+      clean: {
+        keep: (asset) => asset.replace(/\\/g, "/").startsWith("drawio/"),
+      },
     },
     resolve: {
       extensions: [".ts", ".tsx", ".js", ".jsx"],
@@ -57,14 +61,6 @@ module.exports = (_, argv) => {
     },
     module: {
       rules: [
-        {
-          // @antv/x6 的 esm 入口不带文件后缀，webpack 5 需要关掉 fullySpecified。
-          // 内置图形靠模块求值时注册，不能当成无副作用代码摇掉。
-          test: /\.js$/,
-          include: /node_modules[\\/]@antv[\\/]x6/,
-          resolve: { fullySpecified: false },
-          sideEffects: true,
-        },
         {
           test: /\.(ts|tsx)$/,
           use: {
@@ -140,6 +136,31 @@ module.exports = (_, argv) => {
         },
       }),
       new HtmlWebpackPlugin({ template: "./public/index.html" }),
+      {
+        apply(compiler) {
+          compiler.hooks.afterEmit.tap("CopyDrawioPlugin", () => {
+            const source = path.resolve(__dirname, "vendor/drawio");
+            const target = path.resolve(__dirname, "dist/drawio");
+            const versionFile = path.join(source, "VERSION");
+            if (!fs.existsSync(versionFile)) {
+              throw new Error(
+                "[fat-diagrams] vendor/drawio is missing. Run: python scripts/extract_drawio.py <draw.war>",
+              );
+            }
+            const version = fs.readFileSync(versionFile, "utf8").trim();
+            const copiedVersion = path.join(target, "VERSION");
+            const ready =
+              fs.existsSync(path.join(target, "index.html")) &&
+              fs.existsSync(copiedVersion) &&
+              fs.readFileSync(copiedVersion, "utf8").trim() === version;
+            if (ready) {
+              return;
+            }
+            fs.cpSync(source, target, { recursive: true });
+            console.log(`[fat-diagrams] copied local draw.io ${version}`);
+          });
+        },
+      },
     ],
     devtool: isProd ? false : "source-map",
     optimization: { minimize: isProd },
