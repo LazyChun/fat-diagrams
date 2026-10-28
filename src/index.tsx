@@ -1,7 +1,7 @@
 /**
  * fat-diagrams 插件入口 — Module Federation expose "./plugin"
  *
- * 向宿主注册两种图卡片：关系图（AntV G6）、流程图（draw.io）。
+ * 向宿主注册三种图卡片：关系图（AntV G6）、流程图（draw.io）、思维导图（simple-mind-map）。
  *
  * 标题按当前 locale 解析成文本再注册。插件 key 不在宿主消息目录里，
  * 宿主添加卡片菜单对 name 调用 intl.formatMessage 时会原样显示。
@@ -20,15 +20,19 @@ import { InitSdk } from "components";
 import {
   RelationDiagram,
   FlowDiagram,
+  MindDiagram,
   RelationDisplayConfig,
   FlowDisplayConfig,
+  MindDisplayConfig,
 } from "pluginComps";
 import cn from "./locales/zh_CN";
 import en from "./locales/en_US";
 import { DEFAULT_RELATION } from "./diagram/types";
 import { DEFAULT_FLOW } from "./diagram/flowXml";
+import { createDefaultMind } from "./diagram/mindData";
 import relationIcon from "./assets/relation.svg";
 import flowIcon from "./assets/flow.svg";
+import mindIcon from "./assets/mind.svg";
 
 const LOCALE_MESSAGES: Record<string, Record<string, string>> = {
   zh_CN: cn,
@@ -70,7 +74,9 @@ interface DiagramCardDef {
   iconUrl: string;
   index: number;
   defaultSize: { w: number; h: number; minW?: number; minH?: number };
-  defaultOptions: Record<string, unknown>;
+  defaultOptions:
+    | Record<string, unknown>
+    | ((locale: string) => Record<string, unknown>);
   component: React.FC<DiagramComponentProps>;
   configComponent: React.FC;
 }
@@ -101,6 +107,18 @@ const DIAGRAM_CARDS: DiagramCardDef[] = [
     },
     component: FlowDiagram,
     configComponent: FlowDisplayConfig,
+  },
+  {
+    type: "fat-diagrams.mind",
+    titleKey: "fat-diagrams.mind",
+    iconUrl: mindIcon,
+    index: 2,
+    defaultSize: { w: 24, h: 80, minW: 8, minH: 40 },
+    defaultOptions: (locale) => ({
+      mind: createDefaultMind(locale),
+    }),
+    component: MindDiagram,
+    configComponent: MindDisplayConfig,
   },
 ];
 
@@ -154,7 +172,10 @@ const registerDiagramCards = (locale: string): void => {
           minH: 8,
           ...card.defaultSize,
         },
-        defaultOptions: card.defaultOptions,
+        defaultOptions:
+          typeof card.defaultOptions === "function"
+            ? card.defaultOptions(locale)
+            : card.defaultOptions,
         // 图还没有绑定查询，先隐藏数据配置区
         dataConfig: false,
         actionIds: ["relate", "linkTo"],

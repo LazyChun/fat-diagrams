@@ -4,15 +4,17 @@
   "code": "fat-diagrams",
   "type": "bespokePlugin",
   "name": "Fat Diagrams",
-  "description": "提供关系图，以及基于 draw.io 的流程图。",
-  "shortDesc": "关系与流程图",
+  "description": "提供关系图、思维导图，以及基于 draw.io 的流程图。",
+  "shortDesc": "关系图、思维导图与流程图",
   "category": "diagram",
   "keywords": [
     "关系图",
     "流程图",
+    "思维导图",
     "拓扑",
     "diagram",
-    "flowchart"
+    "flowchart",
+    "mindmap"
   ],
   "engines": {
     "fat-notes": ">=0.1.0"
@@ -29,6 +31,12 @@
       "name": "流程图",
       "description": "用 draw.io 编辑流程图，图形保存在卡片里。",
       "match": "(流程图|流程|flow\\s*chart|flowchart)"
+    },
+    {
+      "id": "mind-map",
+      "name": "思维导图",
+      "description": "用思维导图整理层级主题，支持多种结构。",
+      "match": "(思维导图|脑图|mind\\s*map|mindmap)"
     }
   ]
 }
