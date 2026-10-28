@@ -106,6 +106,61 @@ const layoutOptions = (layout: string) =>
         linkDistance: 140,
       };
 
+type CanvasLayerName = "background" | "main" | "label" | "transient";
+
+// 卡片从 0 尺寸撑开时，G6 resize 会把镜头留在原点。
+// 力导向把节点放在画布坐标中心，原点正对视口中心时，整张图就出现在右下角。
+// translateTo([0, 0]) 读到的中心也是原点，拉不回来。这里直接让镜头对准节点。
+const focusNodes = (graph: G6Graph) => {
+  const nodes = graph.getNodeData();
+  if (!nodes.length) {
+    return;
+  }
+  let sumX = 0;
+  let sumY = 0;
+  nodes.forEach((node) => {
+    const [x, y] = graph.getElementPosition(node.id);
+    sumX += x;
+    sumY += y;
+  });
+  const cx = sumX / nodes.length;
+  const cy = sumY / nodes.length;
+  const canvas = graph.getCanvas();
+  Object.keys(canvas.getLayers()).forEach((layer) => {
+    const camera = canvas.getCamera(layer as CanvasLayerName);
+    const [, , z = 500] = camera.getPosition();
+    camera.setZoom(1);
+    camera.setPosition(cx, cy, z);
+    camera.setFocalPoint(cx, cy, 0);
+  });
+};
+
+const resizeKeepingCamera = (graph: G6Graph, width: number, height: number) => {
+  const canvas = graph.getCanvas();
+  const shots = Object.keys(canvas.getLayers()).map((layer) => {
+    const camera = canvas.getCamera(layer as CanvasLayerName);
+    const [x, y, z = 0] = camera.getPosition();
+    const [fx, fy, fz = 0] = camera.getFocalPoint();
+    return {
+      layer: layer as CanvasLayerName,
+      x,
+      y,
+      z,
+      fx,
+      fy,
+      fz,
+      zoom: camera.getZoom(),
+    };
+  });
+  graph.setSize(width, height);
+  shots.forEach((shot) => {
+    const camera = canvas.getCamera(shot.layer);
+    camera.setZoom(shot.zoom);
+    camera.setPosition(shot.x, shot.y, shot.z);
+    camera.setFocalPoint(shot.fx, shot.fy, shot.fz);
+  });
+};
+
 const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
   const { item, inConfig } = props;
   const intl = useIntl();
@@ -214,26 +269,42 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
     });
     graphRef.current = graph;
     let disposed = false;
+    let starting = false;
+    let placed = false;
 
     const boot = async () => {
-      const width = el.clientWidth || 320;
-      const height = el.clientHeight || 240;
-      graph.setSize(width, height);
-      await graph.render();
-      if (disposed) {
+      if (disposed || placed || starting || graph.destroyed) {
         return;
       }
-      const model = readRelation(itemRef.current);
-      const missingPosition = model.nodes.some(
-        (node) => node.x == null || node.y == null,
-      );
-      if (missingPosition) {
-        await graph.layout(layoutOptions(model.layout));
-        graph.stopLayout();
-        if (!disposed) {
-          await graph.fitView();
+      const width = el.clientWidth;
+      const height = el.clientHeight;
+      // 卡片刚挂上时容器经常还是 0。用 320×240 做布局会把中心算在左上角，再被存进卡片。
+      if (width < 2 || height < 2) {
+        return;
+      }
+      starting = true;
+      try {
+        graph.setSize(width, height);
+        await graph.render();
+        if (disposed || graph.destroyed) {
+          return;
+        }
+        const model = readRelation(itemRef.current);
+        const missingPosition = model.nodes.some(
+          (node) => node.x == null || node.y == null,
+        );
+        if (missingPosition) {
+          await graph.layout(layoutOptions(model.layout));
+          graph.stopLayout();
+          if (disposed || graph.destroyed) {
+            return;
+          }
           persistRef.current();
         }
+        focusNodes(graph);
+        placed = true;
+      } finally {
+        starting = false;
       }
     };
     writtenRef.current = modelKey(readRelation(itemRef.current));
@@ -276,9 +347,14 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
     const observer = new ResizeObserver(() => {
       const width = el.clientWidth;
       const height = el.clientHeight;
-      if (width > 0 && height > 0 && !graph.destroyed) {
-        graph.setSize(width, height);
+      if (width < 2 || height < 2 || graph.destroyed) {
+        return;
       }
+      if (!placed) {
+        void boot();
+        return;
+      }
+      resizeKeepingCamera(graph, width, height);
     });
     observer.observe(el);
 
@@ -319,8 +395,8 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
       if (relayout || missingPosition) {
         await graph.layout(layoutOptions(model.layout));
         graph.stopLayout();
-        if (!cancelled) {
-          await graph.fitView();
+        if (!cancelled && !graph.destroyed) {
+          focusNodes(graph);
           persistRef.current();
         }
       }
