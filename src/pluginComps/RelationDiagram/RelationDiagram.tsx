@@ -1,10 +1,11 @@
 /**
  * 关系图 — AntV G6。
  * 双击空白添加节点，从圆点拖出连线（拖到空白处会新建节点），悬停删除。
+ * 悬停节点可改颜色、设置图片；悬停连线可改颜色、设置名称。
  * 结果写回卡片 options.relation。
  */
 import React, { useEffect, useId, useRef, useState } from "react";
-import { Input } from "antd";
+import { ColorPicker, Input } from "antd";
 import { Graph } from "@antv/g6";
 import type { Graph as G6Graph } from "@antv/g6";
 import { useIntl } from "react-intl";
@@ -31,10 +32,19 @@ interface RelationDiagramProps {
 }
 
 interface LabelEditorState {
+  kind: "node" | "edge";
   id: string;
   x: number;
   y: number;
   value: string;
+}
+
+interface RelationDatum {
+  data?: {
+    label?: unknown;
+    color?: unknown;
+    image?: unknown;
+  };
 }
 
 interface NodeChrome {
@@ -66,8 +76,23 @@ interface LinkDrag {
 }
 
 const NODE_SIZE = 36;
+const ICON_SIZE = 30;
 const CURVE_OFFSET = 30;
 const PULL_DISTANCE = 28;
+const NODE_IMAGE_PX = 96;
+const DEFAULT_NODE_COLOR = "#1677ff";
+const DEFAULT_NODE_STROKE = "#0958d9";
+const DEFAULT_EDGE_COLOR = "#8c8c8c";
+const COLOR_PRESETS = [
+  DEFAULT_NODE_COLOR,
+  "#52c41a",
+  "#faad14",
+  "#f5222d",
+  "#722ed1",
+  "#13c2c2",
+  DEFAULT_EDGE_COLOR,
+  "#172634",
+];
 
 const readRelation = (item: Block.Item): RelationModel => {
   const relation = item.options?.relation;
@@ -90,10 +115,52 @@ const modelKey = (model: RelationModel): string =>
     edges: model.edges,
   });
 
+const readText = (value: unknown): string | undefined =>
+  typeof value === "string" && value ? value : undefined;
+
+const nodeColorOf = (datum: RelationDatum): string =>
+  readText(datum.data?.color) || DEFAULT_NODE_COLOR;
+
+const edgeColorOf = (datum: RelationDatum): string =>
+  readText(datum.data?.color) || DEFAULT_EDGE_COLOR;
+
+const darkenHex = (hex: string): string => {
+  const raw = hex.replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(raw)) {
+    return hex;
+  }
+  const channel = (start: number) =>
+    Math.max(0, parseInt(raw.slice(start, start + 2), 16) - 36)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${channel(0)}${channel(2)}${channel(4)}`;
+};
+
+const nodeStrokeOf = (datum: RelationDatum): string => {
+  const color = nodeColorOf(datum);
+  return color === DEFAULT_NODE_COLOR ? DEFAULT_NODE_STROKE : darkenHex(color);
+};
+
+const relationData = (
+  fields: Record<string, string | undefined>,
+): Record<string, string> => {
+  const data: Record<string, string> = {};
+  Object.entries(fields).forEach(([key, value]) => {
+    if (value) {
+      data[key] = value;
+    }
+  });
+  return data;
+};
+
 const toG6Data = (model: RelationModel) => ({
   nodes: model.nodes.map((node) => ({
     id: node.id,
-    data: { label: node.label },
+    data: relationData({
+      label: node.label,
+      color: node.color,
+      image: node.image,
+    }),
     style:
       node.x == null || node.y == null
         ? undefined
@@ -103,26 +170,194 @@ const toG6Data = (model: RelationModel) => ({
     id: edge.id,
     source: edge.source,
     target: edge.target,
+    data: relationData({
+      label: edge.label,
+      color: edge.color,
+    }),
   })),
 });
 
 const readGraph = (graph: G6Graph): Pick<RelationModel, "nodes" | "edges"> => {
-  const nodes: DiagramNode[] = graph.getNodeData().map((node) => ({
-    id: String(node.id),
-    label: String(node.data?.label ?? ""),
-    x: typeof node.style?.x === "number" ? node.style.x : undefined,
-    y: typeof node.style?.y === "number" ? node.style.y : undefined,
-  }));
+  const nodes: DiagramNode[] = graph.getNodeData().map((node) => {
+    const color = readText(node.data?.color);
+    const image = readText(node.data?.image);
+    const next: DiagramNode = {
+      id: String(node.id),
+      label: String(node.data?.label ?? ""),
+      x: typeof node.style?.x === "number" ? node.style.x : undefined,
+      y: typeof node.style?.y === "number" ? node.style.y : undefined,
+    };
+    if (color) {
+      next.color = color;
+    }
+    if (image) {
+      next.image = image;
+    }
+    return next;
+  });
   const edges: DiagramEdge[] = graph
     .getEdgeData()
     .filter((edge) => edge.source && edge.target && edge.source !== edge.target)
-    .map((edge) => ({
-      id: String(edge.id || nextDiagramId("e")),
-      source: String(edge.source),
-      target: String(edge.target),
-    }));
+    .map((edge) => {
+      const label = readText(edge.data?.label);
+      const color = readText(edge.data?.color);
+      const next: DiagramEdge = {
+        id: String(edge.id || nextDiagramId("e")),
+        source: String(edge.source),
+        target: String(edge.target),
+      };
+      if (label) {
+        next.label = label;
+      }
+      if (color) {
+        next.color = color;
+      }
+      return next;
+    });
   return { nodes, edges };
 };
+
+const applyLabel = (
+  graph: G6Graph,
+  kind: "node" | "edge",
+  id: string,
+  value: string,
+): boolean => {
+  if (kind === "node") {
+    const node = graph.getNodeData().find((entry) => String(entry.id) === id);
+    if (!node || String(node.data?.label ?? "") === value) {
+      return false;
+    }
+    graph.updateNodeData([{ id, data: { ...node.data, label: value } }]);
+    return true;
+  }
+  const edge = graph.getEdgeData().find((entry) => String(entry.id) === id);
+  if (!edge || String(edge.data?.label ?? "") === value) {
+    return false;
+  }
+  graph.updateEdgeData([{ id, data: { ...edge.data, label: value } }]);
+  return true;
+};
+
+const patchAppearance = (
+  graph: G6Graph,
+  kind: "node" | "edge",
+  id: string,
+  fields: Record<string, string>,
+): boolean => {
+  if (kind === "node") {
+    const node = graph.getNodeData().find((entry) => String(entry.id) === id);
+    if (!node) {
+      return false;
+    }
+    graph.updateNodeData([{ id, data: { ...node.data, ...fields } }]);
+    return true;
+  }
+  const edge = graph.getEdgeData().find((entry) => String(entry.id) === id);
+  if (!edge) {
+    return false;
+  }
+  graph.updateEdgeData([{ id, data: { ...edge.data, ...fields } }]);
+  return true;
+};
+
+const hexColor = (value: { toHexString: () => string }): string =>
+  value.toHexString().slice(0, 7).toLowerCase();
+
+const readChromeAppearance = (
+  graph: G6Graph | null,
+  current: Chrome | null,
+): { color: string; image: string } => {
+  if (!graph || graph.destroyed || !current) {
+    return {
+      color: current?.kind === "edge" ? DEFAULT_EDGE_COLOR : DEFAULT_NODE_COLOR,
+      image: "",
+    };
+  }
+  if (current.kind === "node") {
+    const node = graph.getNodeData().find((entry) => String(entry.id) === current.id);
+    return {
+      color: nodeColorOf({ data: node?.data }),
+      image: readText(node?.data?.image) || "",
+    };
+  }
+  const edge = graph.getEdgeData().find((entry) => String(entry.id) === current.id);
+  return {
+    color: edgeColorOf({ data: edge?.data }),
+    image: "",
+  };
+};
+
+const fitImageFile = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      const longest = Math.max(image.width, image.height);
+      const scale = longest > 0 ? Math.min(1, NODE_IMAGE_PX / longest) : 1;
+      const width = Math.max(1, Math.round((image.width || NODE_IMAGE_PX) * scale));
+      const height = Math.max(1, Math.round((image.height || NODE_IMAGE_PX) * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        reject(new Error("canvas"));
+        return;
+      }
+      const keepAlpha =
+        file.type === "image/png" ||
+        file.type === "image/webp" ||
+        file.type === "image/gif";
+      if (!keepAlpha) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+      }
+      ctx.drawImage(image, 0, 0, width, height);
+      const dataUrl = keepAlpha
+        ? canvas.toDataURL("image/png")
+        : canvas.toDataURL("image/jpeg", 0.86);
+      URL.revokeObjectURL(url);
+      resolve(dataUrl);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image"));
+    };
+    image.src = url;
+  });
+
+const PictureIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+    <rect
+      x="1.2"
+      y="1.8"
+      width="9.6"
+      height="8.4"
+      rx="1.2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+    />
+    <circle cx="4" cy="4.4" r="0.9" fill="currentColor" />
+    <path
+      d="M1.6 8.6 L4.2 6.3 L6.1 7.8 L8 6 L10.4 8.7"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.1"
+    />
+  </svg>
+);
+
+const NameIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+    <path
+      d="M2.1 10 L6 1.6 L9.9 10 H8.3 L7.4 7.6 H4.6 L3.7 10 Z M5.1 6.3 H6.9 L6 3.9 Z"
+      fill="currentColor"
+    />
+  </svg>
+);
 
 const layoutOptions = (layout: string) =>
   layout === "hierarchy"
@@ -384,6 +619,12 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
   const [movingNode, setMovingNode] = useState(false);
   const [editor, setEditor] = useState<LabelEditorState | null>(null);
   const editorRef = useRef<LabelEditorState | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const imageTargetRef = useRef<string | null>(null);
+  const styleLockRef = useRef(false);
+  const pickerOpenRef = useRef(false);
+  const pointerInChromeRef = useRef(false);
+  const [, setAppearanceRev] = useState(0);
   itemRef.current = item;
   inConfigRef.current = inConfig;
   linkDragRef.current = linkDrag;
@@ -491,7 +732,7 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
       persistRef.current();
       const [x, y] = graph.getElementPosition(id);
       const [vx, vy] = graph.getViewportByCanvas([x, y]);
-      openEditorRef.current({ id, x: vx, y: vy, value: label });
+      openEditorRef.current({ kind: "node", id, x: vx, y: vy, value: label });
       setChrome(placeChrome(graph, "node", id));
     });
   };
@@ -557,7 +798,7 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
   };
 
   const hideSoon = () => {
-    if (linkDragRef.current || !chromeRef.current) {
+    if (linkDragRef.current || styleLockRef.current || !chromeRef.current) {
       return;
     }
     cancelHide();
@@ -599,26 +840,48 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
     setChrome((current) => (current && sameChrome(current, next) ? current : next));
   };
 
+  const enterChrome = () => {
+    pointerInChromeRef.current = true;
+    cancelHide();
+  };
+
+  const leaveChrome = () => {
+    pointerInChromeRef.current = false;
+    hideSoon();
+  };
+
+  const paintAppearance = (
+    kind: "node" | "edge",
+    id: string,
+    fields: Record<string, string>,
+    persist: boolean,
+  ) => {
+    const graph = graphRef.current;
+    if (!graph || graph.destroyed || !patchAppearance(graph, kind, id, fields)) {
+      return;
+    }
+    setAppearanceRev((rev) => rev + 1);
+    void graph.draw().then(() => {
+      if (persist) {
+        persistRef.current();
+      }
+    });
+  };
+
   const openEditorRef = useRef<(next: LabelEditorState) => void>(() => undefined);
   openEditorRef.current = (next) => {
     const current = editorRef.current;
-    if (current && current.id !== next.id) {
+    if (current && (current.id !== next.id || current.kind !== next.kind)) {
       const graph = graphRef.current;
-      const node =
-        graph && !graph.destroyed
-          ? graph.getNodeData().find((entry) => String(entry.id) === current.id)
-          : undefined;
-      if (graph && !graph.destroyed && node && String(node.data?.label ?? "") !== current.value) {
-        graph.updateNodeData([
-          {
-            id: current.id,
-            data: { ...node.data, label: current.value },
-          },
-        ]);
+      if (graph && !graph.destroyed && applyLabel(graph, current.kind, current.id, current.value)) {
         void graph.draw().then(() => persistRef.current());
       }
     }
-    setEditor(current?.id === next.id ? { ...current, x: next.x, y: next.y } : next);
+    setEditor(
+      current?.id === next.id && current.kind === next.kind
+        ? { ...current, x: next.x, y: next.y }
+        : next,
+    );
   };
 
   const uiRef = useRef({
@@ -733,7 +996,20 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
   };
 
   useEffect(() => {
+    const onFocus = () => {
+      window.setTimeout(() => {
+        if (pickerOpenRef.current) {
+          return;
+        }
+        styleLockRef.current = false;
+        if (!pointerInChromeRef.current) {
+          uiRef.current.hideSoon();
+        }
+      }, 250);
+    };
+    window.addEventListener("focus", onFocus);
     return () => {
+      window.removeEventListener("focus", onFocus);
       if (hideTimerRef.current != null) {
         window.clearTimeout(hideTimerRef.current);
       }
@@ -783,9 +1059,13 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
         type: "circle",
         style: {
           size: NODE_SIZE,
-          fill: "#1677FF",
-          stroke: "#0958D9",
+          fill: (datum) => nodeColorOf(datum as RelationDatum),
+          stroke: (datum) => nodeStrokeOf(datum as RelationDatum),
           lineWidth: 1,
+          iconSrc: (datum) => readText((datum as RelationDatum).data?.image) || "",
+          iconWidth: ICON_SIZE,
+          iconHeight: ICON_SIZE,
+          iconRadius: ICON_SIZE / 2,
           labelText: (datum) => String(datum.data?.label ?? ""),
           labelFill: "#172634",
           labelFontSize: 12,
@@ -796,7 +1076,6 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
         state: {
           selected: {
             lineWidth: 3,
-            stroke: "#0958D9",
           },
           "link-target": {
             lineWidth: 3,
@@ -807,16 +1086,26 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
       edge: {
         type: "quadratic",
         style: {
-          stroke: "#8C8C8C",
+          curveOffset: CURVE_OFFSET,
+          stroke: (datum) => edgeColorOf(datum as RelationDatum),
           lineWidth: 1.5,
           endArrow: true,
           cursor: "pointer",
           increasedLineWidthForHitTesting: 18,
+          labelText: (datum) => readText((datum as RelationDatum).data?.label) || "",
+          labelFill: "#172634",
+          labelFontSize: 12,
+          labelMaxWidth: 120,
+          labelBackground: true,
+          labelBackgroundFill: "#ffffff",
+          labelBackgroundOpacity: 0.94,
+          labelBackgroundRadius: 4,
+          labelPadding: [1, 5],
+          labelOffsetY: -12,
         },
         state: {
           selected: {
-            stroke: "#1677FF",
-            lineWidth: 2,
+            lineWidth: 2.5,
           },
         },
       },
@@ -908,6 +1197,25 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
         uiRef.current.showChrome("edge", String(id));
       }
     });
+    graph.on("edge:dblclick", (event) => {
+      const id = (event as { target?: { id?: string } }).target?.id;
+      const graphLive = graphRef.current;
+      if (!id || !graphLive || graphLive.destroyed) {
+        return;
+      }
+      const edge = graphLive.getEdgeData().find((item) => String(item.id) === String(id));
+      const placed = placeChrome(graphLive, "edge", String(id));
+      if (!edge || !placed || placed.kind !== "edge") {
+        return;
+      }
+      uiRef.current.openEditor({
+        kind: "edge",
+        id: String(id),
+        x: placed.x,
+        y: placed.y - 16,
+        value: String(edge.data?.label ?? ""),
+      });
+    });
     graph.on("pointermove", (event) => {
       if (linkDragRef.current) {
         return;
@@ -958,6 +1266,7 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
       const [x, y] = graph.getElementPosition(id);
       const [vx, vy] = graph.getViewportByCanvas([x, y]);
       uiRef.current.openEditor({
+        kind: "node",
         id,
         x: vx,
         y: vy,
@@ -1054,23 +1363,42 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
     };
   }, [externalKey]);
 
-  const commitLabel = (id: string, value: string) => {
-    setEditor((current) => (current?.id === id ? null : current));
+  const commitLabel = (kind: "node" | "edge", id: string, value: string) => {
+    setEditor((current) =>
+      current?.id === id && current.kind === kind ? null : current,
+    );
     const graph = graphRef.current;
-    if (!graph || graph.destroyed) {
+    if (!graph || graph.destroyed || !applyLabel(graph, kind, id, value)) {
       return;
     }
-    const node = graph.getNodeData().find((entry) => String(entry.id) === id);
-    if (!node) {
-      return;
-    }
-    graph.updateNodeData([
-      {
-        id,
-        data: { ...node.data, label: value },
-      },
-    ]);
     void graph.draw().then(() => persistRef.current());
+  };
+
+  const pickNodeImage = (id: string) => {
+    imageTargetRef.current = id;
+    styleLockRef.current = true;
+    const input = fileRef.current;
+    if (!input) {
+      styleLockRef.current = false;
+      return;
+    }
+    input.value = "";
+    input.click();
+  };
+
+  const onPickImage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const id = imageTargetRef.current;
+    styleLockRef.current = false;
+    imageTargetRef.current = null;
+    if (!file || !id) {
+      return;
+    }
+    void fitImageFile(file)
+      .then((image) => {
+        paintAppearance("node", id, { image }, true);
+      })
+      .catch(() => undefined);
   };
 
   const linkTitle = intl.formatMessage({ id: "fat-diagrams.relation.link" });
@@ -1079,6 +1407,18 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
   });
   const deleteEdgeTitle = intl.formatMessage({
     id: "fat-diagrams.relation.deleteEdge",
+  });
+  const colorTitle = intl.formatMessage({ id: "fat-diagrams.relation.color" });
+  const edgeNameTitle = intl.formatMessage({ id: "fat-diagrams.relation.edgeName" });
+  const paletteTitle = intl.formatMessage({ id: "fat-diagrams.relation.palette" });
+  const appearance = readChromeAppearance(graphRef.current, chrome);
+  const imageTitle = intl.formatMessage({
+    id: appearance.image
+      ? "fat-diagrams.relation.replaceImage"
+      : "fat-diagrams.relation.image",
+  });
+  const clearImageTitle = intl.formatMessage({
+    id: "fat-diagrams.relation.clearImage",
   });
 
   return (
@@ -1092,7 +1432,11 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
         onMouseDown={(event) => {
           event.stopPropagation();
           const target = event.target as HTMLElement;
-          if (target.closest("input, textarea, button")) {
+          if (
+            target.closest(
+              "input, textarea, button, .ant-color-picker-trigger",
+            )
+          ) {
             return;
           }
           event.currentTarget.focus();
@@ -1135,8 +1479,132 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
             }}
           />
         ) : null}
-        {chrome && !linkDrag && !movingNode ? (
+        <input
+          ref={fileRef}
+          className={styles.file}
+          type="file"
+          accept="image/*"
+          onChange={onPickImage}
+        />
+        {chrome &&
+        !linkDrag &&
+        !movingNode &&
+        !(editor?.id === chrome.id && editor.kind === chrome.kind) ? (
           <>
+            <div
+              className={
+                chrome.kind === "node"
+                  ? styles.tools
+                  : `${styles.tools} ${styles.toolsEdge}`
+              }
+              style={
+                chrome.kind === "node"
+                  ? { left: chrome.x - chrome.r - 6, top: chrome.y }
+                  : { left: chrome.x, top: chrome.y - 28 }
+              }
+              onMouseEnter={enterChrome}
+              onMouseLeave={leaveChrome}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <span title={colorTitle}>
+                <ColorPicker
+                  className={styles.swatch}
+                  style={{
+                    width: 18,
+                    height: 18,
+                    minWidth: 18,
+                    padding: 2,
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                  }}
+                  size="small"
+                  format="hex"
+                  disabledAlpha
+                  value={appearance.color}
+                  arrow={false}
+                  presets={[
+                    {
+                      label: paletteTitle,
+                      colors: COLOR_PRESETS,
+                      defaultOpen: true,
+                    },
+                  ]}
+                  onOpenChange={(open) => {
+                    pickerOpenRef.current = open;
+                    styleLockRef.current = open;
+                    if (!open && !pointerInChromeRef.current) {
+                      hideSoon();
+                    }
+                  }}
+                  onChange={(value) =>
+                    paintAppearance(
+                      chrome.kind,
+                      chrome.id,
+                      { color: hexColor(value) },
+                      false,
+                    )
+                  }
+                  onChangeComplete={(value) =>
+                    paintAppearance(
+                      chrome.kind,
+                      chrome.id,
+                      { color: hexColor(value) },
+                      true,
+                    )
+                  }
+                />
+              </span>
+              {chrome.kind === "node" ? (
+                <>
+                  <button
+                    type="button"
+                    className={styles.tool}
+                    title={imageTitle}
+                    aria-label={imageTitle}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => pickNodeImage(chrome.id)}
+                  >
+                    <PictureIcon />
+                  </button>
+                  {appearance.image ? (
+                    <button
+                      type="button"
+                      className={styles.tool}
+                      title={clearImageTitle}
+                      aria-label={clearImageTitle}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() =>
+                        paintAppearance("node", chrome.id, { image: "" }, true)
+                      }
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className={styles.tool}
+                  title={edgeNameTitle}
+                  aria-label={edgeNameTitle}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    const edge = graphRef.current
+                      ?.getEdgeData()
+                      .find((entry) => String(entry.id) === chrome.id);
+                    openEditorRef.current({
+                      kind: "edge",
+                      id: chrome.id,
+                      x: chrome.x,
+                      y: chrome.y - 16,
+                      value: String(edge?.data?.label ?? ""),
+                    });
+                  }}
+                >
+                  <NameIcon />
+                </button>
+              )}
+            </div>
             {chrome.kind === "node" ? (
               <button
                 type="button"
@@ -1144,8 +1612,8 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
                 style={{ left: chrome.x + chrome.r, top: chrome.y }}
                 title={linkTitle}
                 aria-label={linkTitle}
-                onMouseEnter={cancelHide}
-                onMouseLeave={hideSoon}
+                onMouseEnter={enterChrome}
+                onMouseLeave={leaveChrome}
                 onMouseDown={startLink}
               />
             ) : null}
@@ -1159,8 +1627,8 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
               }
               title={chrome.kind === "node" ? deleteNodeTitle : deleteEdgeTitle}
               aria-label={chrome.kind === "node" ? deleteNodeTitle : deleteEdgeTitle}
-              onMouseEnter={cancelHide}
-              onMouseLeave={hideSoon}
+              onMouseEnter={enterChrome}
+              onMouseLeave={leaveChrome}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 if (chrome.kind === "node") {
@@ -1176,16 +1644,21 @@ const RelationDiagram: React.FC<RelationDiagramProps> = (props) => {
         ) : null}
         {editor ? (
           <Input
-            className={styles.labelInput}
+            className={
+              editor.kind === "edge"
+                ? `${styles.labelInput} ${styles.labelInputEdge}`
+                : styles.labelInput
+            }
             style={{ left: editor.x, top: editor.y }}
             size="small"
             autoFocus
+            placeholder={editor.kind === "edge" ? edgeNameTitle : undefined}
             value={editor.value}
             onChange={(event) =>
               setEditor({ ...editor, value: event.target.value })
             }
-            onBlur={() => commitLabel(editor.id, editor.value)}
-            onPressEnter={() => commitLabel(editor.id, editor.value)}
+            onBlur={() => commitLabel(editor.kind, editor.id, editor.value)}
+            onPressEnter={() => commitLabel(editor.kind, editor.id, editor.value)}
           />
         ) : null}
       </div>

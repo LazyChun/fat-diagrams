@@ -3,12 +3,20 @@ export interface DiagramNode {
   label: string;
   x?: number;
   y?: number;
+  /** 圆点填充色，如 #1677ff。空则用默认蓝。 */
+  color?: string;
+  /** 圆点图片，压缩后的 data URL。 */
+  image?: string;
 }
 
 export interface DiagramEdge {
   id: string;
   source: string;
   target: string;
+  /** 连线名称，画在曲线中点。 */
+  label?: string;
+  /** 连线颜色。空则用默认灰。 */
+  color?: string;
 }
 
 export interface RelationModel {

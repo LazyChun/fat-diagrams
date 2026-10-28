@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+out
+build
+.venv
+venv
+__pycache__
