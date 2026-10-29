@@ -3,7 +3,7 @@
   "id": "f3b8c1d4-6a27-4e95-8c0d-1e7a9b2f4d63",
   "code": "fat-diagrams",
   "type": "bespokePlugin",
-  "name": "Fat Diagrams",
+  "name": "关系与流程图",
   "description": "提供关系图、思维导图，以及基于 draw.io 的流程图。",
   "shortDesc": "关系图、思维导图与流程图",
   "category": "diagram",
@@ -38,5 +38,6 @@
       "description": "用思维导图整理层级主题，支持多种结构。",
       "match": "(思维导图|脑图|mind\\s*map|mindmap)"
     }
-  ]
+  ],
+  "icon": "[icon]ControlFilled"
 }
