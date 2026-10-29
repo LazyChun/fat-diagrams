@@ -8,7 +8,6 @@ export default {
   "fat-diagrams.flow.error": "The diagram editor did not open.",
   "fat-diagrams.flow.retry": "Retry",
   "fat-diagrams.config.style": "Style",
-  "fat-diagrams.config.panel": "Frame",
   "fat-diagrams.config.relation.layout": "Layout",
   "fat-diagrams.config.relation.layout.force": "Force",
   "fat-diagrams.config.relation.layout.hierarchy": "Hierarchy",

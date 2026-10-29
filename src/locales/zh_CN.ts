@@ -8,7 +8,6 @@ export default {
   "fat-diagrams.flow.error": "流程图编辑器没有打开。",
   "fat-diagrams.flow.retry": "重试",
   "fat-diagrams.config.style": "样式",
-  "fat-diagrams.config.panel": "卡片外框",
   "fat-diagrams.config.relation.layout": "布局",
   "fat-diagrams.config.relation.layout.force": "力导向",
   "fat-diagrams.config.relation.layout.hierarchy": "层级",

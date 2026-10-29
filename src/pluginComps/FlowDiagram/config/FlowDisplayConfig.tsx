@@ -24,12 +24,7 @@ const FlowDisplayConfig: React.FC = () => {
           <BlockName />
         </ConfigForm>
       </DisplayCollapse>
-      <DisplayCollapse
-        defaultExpand={false}
-        title={intl.formatMessage({ id: "fat-diagrams.config.panel" })}
-      >
-        <PanelDisplay />
-      </DisplayCollapse>
+      <PanelDisplay />
     </div>
   );
 };
